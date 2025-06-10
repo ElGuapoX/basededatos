@@ -21,7 +21,6 @@ CREATE TABLE salario_quincenal (
     CONSTRAINT fk_colaborador FOREIGN KEY (id_codcolaborador) REFERENCES colaboradores(id_colaborador)
 );
 
---La fecha de pago son los 15 y 30 de cada mes
 --Los colaboradores que cuentan con un status (A=Activo, R=Retirado, V=Vacaciones) 
 --Las quincenas solo son pagadas a los colaboradres activos (con status A)
 

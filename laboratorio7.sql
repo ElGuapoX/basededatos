@@ -1,5 +1,56 @@
 --Primer PARTE
 
+--Creacion de secuecias
+
+CREATE SEQUENCE seq_id_cliente
+START WITH 1
+INCREMENT BY 1
+NOMAXVALUE
+MINVALUE 1
+NOCYCLE;
+
+CREATE SEQUENCE seq_id_profesion
+START WITH 1
+INCREMENT BY 1
+NOMAXVALUE
+MINVALUE 1
+NOCYCLE;
+
+CREATE SEQUENCE seq_id_email
+START WITH 1
+INCREMENT BY 1
+NOMAXVALUE
+MINVALUE 1
+NOCYCLE;
+
+CREATE SEQUENCE seq_id_telefono
+START WITH 1
+INCREMENT BY 1
+NOMAXVALUE
+MINVALUE 1
+NOCYCLE;
+
+CREATE SEQUENCE seq_id_prestamo
+START WITH 1
+INCREMENT BY 1
+NOMAXVALUE
+MINVALUE 1
+NOCYCLE;
+
+CREATE SEQUENCE seq_id_transaccion
+START WITH 1
+INCREMENT BY 1
+NOMAXVALUE
+MINVALUE 1
+NOCYCLE;
+
+CREATE SEQUENCE seq_cod_sucursal
+START WITH 1
+INCREMENT BY 1
+NOMAXVALUE
+MINVALUE 1
+NOCYCLE;
+
 -- Tabla Profesion
 CREATE TABLE Profesion (
 ID_Profesion NUMBER PRIMARY KEY,
@@ -36,8 +87,8 @@ FOREIGN KEY (ID_Cliente) REFERENCES Cliente(ID_Cliente),
 FOREIGN KEY (ID_Email) REFERENCES Tipo_Email(ID_Email)
 );
 
--- Tabla Tipo_Tel
-CREATE TABLE Tipo_Tel (
+-- Tabla Tipo_Telefono
+CREATE TABLE Tipo_Telefono (
 ID_Telefono NUMBER PRIMARY KEY,
 Tipo_Telefono VARCHAR2(50) NOT NULL
 );
@@ -113,6 +164,110 @@ CREATE TABLE transaccion (
     FOREIGN KEY (id_cliente) REFERENCES Cliente(ID_Cliente)
 );
 
---Creacion de secuecias
+-- Procedimientos
 
-CREATE SEQUENCE 
+CREATE OR REPLACE PROCEDURE insertar_tipo_telefono (p_id_telefono IN NUMBER, p_tipo_telefono IN VARCHAR2) AS
+BEGIN
+    INSERT INTO Tipo_Telefono (ID_Telefono, Tipo_Telefono) VALUES (p_id_telefono, p_tipo_telefono);
+END insertar_tipo_telefono;
+/
+
+CREATE OR REPLACE PROCEDURE insertar_tipo_email (p_id_email IN NUMBER, p_tipo_email IN VARCHAR2) AS
+BEGIN
+    INSERT INTO Tipo_Email (ID_Email, Tipo_Email) VALUES (p_id_email, p_tipo_email);
+END insertar_tipo_email;
+/
+
+CREATE OR REPLACE PROCEDURE insertar_profesion (p_id_profesion IN NUMBER, p_profesion IN VARCHAR2) AS
+BEGIN
+    INSERT INTO Profesion (ID_Profesion, Profesion) VALUES (p_id_profesion, p_profesion);
+END insertar_profesion;
+/
+
+CREATE OR REPLACE PROCEDURE insertar_sucursal (
+    p_cod_sucursal IN NUMBER,
+    p_nombresucursal IN VARCHAR2,
+    p_tipo_prestamo IN VARCHAR2,
+    p_monto_prestamos IN NUMBER
+) AS
+BEGIN
+    INSERT INTO SUCURSAL (cod_sucursal, nombresurcursal, Tipo_Prestamo, monto_prestamos)
+    VALUES (p_cod_sucursal, p_nombresucursal, p_tipo_prestamo, p_monto_prestamos);
+END insertar_sucursal;
+/
+
+CREATE OR REPLACE PROCEDURE insertar_tipo_prestamo (
+    p_id_prestamo IN NUMBER,
+    p_tipo_prestamo IN VARCHAR2,
+    p_tasa_interes_prom IN NUMBER
+) AS    
+BEGIN
+    INSERT INTO Tipo_Prestamo (ID_Prestamo, Tipo_Prestamo, Tasa_Interes_Prom)
+    VALUES (p_id_prestamo, p_tipo_prestamo, p_tasa_interes_prom);
+END insertar_tipo_prestamo;
+/
+
+--Funcion para calcular la edad
+CREATE OR REPLACE FUNCTION calcular_edad (p_fecha_nacimiento IN DATE) RETURN NUMBER AS
+    v_edad NUMBER;
+BEGIN
+    edad := TRUNC(MONTHS_BETWEEN(SYSDATE, p_fecha_nacimiento) / 12);
+    RETURN v_edad;
+END calcular_edad;
+/
+
+--Procedimiento para insertar cliente
+CREATE OR REPLACE PROCEDURE insertar_cliente (
+    p_cedula IN VARCHAR2,
+    p_nombre IN VARCHAR2,
+    p_nombreA IN VARCHAR2,
+    p_apellido IN VARCHAR2,
+    p_apellidoA IN VARCHAR2,
+    p_sexo IN CHAR,
+    p_fecha_nacimiento IN DATE,
+    p_id_profesion IN NUMBER,
+    p_cod_sucursal IN NUMBER
+) AS
+    v_id_cliente NUMBER;
+BEGIN
+    -- Cada vez que se inserte un cliente, se obtiene el siguiente valor de la secuencia, lo que va incrementando automáticamente el ID del cliente.
+    v_id_cliente := seq_id_cliente.NEXTVAL;
+
+    -- Insertar el cliente
+    INSERT INTO Cliente (ID_Cliente, Cedula, Nombre, NombreA, Apellido, ApellidoA, Sexo, Fecha_Nacimiento, ID_Profesion, edad, cod_sucursal)
+    VALUES (v_id_cliente, p_cedula, p_nombre, p_nombreA, p_apellido, p_apellidoA, p_sexo, p_fecha_nacimiento, p_id_profesion, calcular_edad(p_fecha_nacimiento), p_cod_sucursal);
+END insertar_cliente;
+/
+
+--Proceimiento para insertar prestamos
+CREATE OR REPLACE PROCEDURE insertar_prestamo (
+    p_id_cliente IN NUMBER,
+    p_id_prestamo IN NUMBER,
+    p_numero_prestamo IN NUMBER,
+    p_fecha_aprobado IN DATE,
+    p_monto_aprobado IN NUMBER,
+    p_tasa_interes IN NUMBER,
+    p_letra_mensual IN NUMBER,
+    p_monto_pagado IN NUMBER,
+    p_fecha_pago IN DATE,
+    p_cod_sucursal IN NUMBER
+) AS
+    v_id_prestamo NUMBER;
+BEGIN
+    -- Cada vez que se inserte un préstamo, se obtiene el siguiente valor de la secuencia, lo que va incrementando automáticamente el ID del préstamo.
+    v_id_prestamo := seq_id_prestamo.NEXTVAL;
+
+    -- Insertar el préstamo
+    INSERT INTO Prestamo (ID_Cliente, ID_Prestamo, Numero_Prestamo, Fecha_Aprobado, Monto_Aprobado, Tasa_Interes, Letra_Mensual, Monto_Pagado, Fecha_Pago, cod_sucursal)
+    VALUES (p_id_cliente, v_id_prestamo, p_numero_prestamo, p_fecha_aprobado, p_monto_aprobado, p_tasa_interes, p_letra_mensual, p_monto_pagado, p_fecha_pago, p_cod_sucursal);
+
+    UPDATE SUCURSAL SET 
+        monto_prestamos = monto_prestamos + p_monto_aprobado
+    WHERE
+        cod_sucursal = p_cod_sucursal;
+
+END insertar_prestamo;
+/
+
+--Procedimiento para insertar pagos
+CREATE OR REPLACE PROCEDURE insertar_pagos(cod_sucursal)

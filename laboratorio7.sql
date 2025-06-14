@@ -100,7 +100,7 @@ ID_Telefono NUMBER,
 Telefono VARCHAR2(20) NOT NULL,
 PRIMARY KEY (ID_Cliente, ID_Telefono),
 FOREIGN KEY (ID_Cliente) REFERENCES Cliente(ID_Cliente),
-FOREIGN KEY (ID_Telefono) REFERENCES Tipo_Tel(ID_Telefono)
+FOREIGN KEY (ID_Telefono) REFERENCES Tipo_Telefono(ID_Telefono)
 );
 
 -- Tabla Tipo_Prestamo
@@ -151,16 +151,16 @@ ALTER TABLE Prestamo ADD (
 );
 
 CREATE TABLE transaccion (
-    cod_sucursal NUMBER (3) NOT NULL,
     id_transaccion NUMBER (10) PRIMARY KEY,
+    cod_sucursal NUMBER (3) NOT NULL,
     id_cliente NUMBER (10) NOT NULL,
-    Tipo_Prestamo VARCHAR2(20) NOT NULL,
+    ID_Prestamo NUMBER NOT NULL,
     fecha_transaccion DATE NOT NULL,
     monto_pago NUMBER(12, 2) NOT NULL,
     fechainsercion DATE NOT NULL,
     usuario VARCHAR2(20) NOT NULL,
     FOREIGN KEY (cod_sucursal) REFERENCES SUCURSAL(cod_sucursal),
-    FOREIGN KEY (Tipo_Prestamo) REFERENCES Tipo_Prestamo(Tipo_Prestamo)
+    FOREIGN KEY (ID_Prestamo) REFERENCES  Tipo_Prestamo(ID_Prestamo),
     FOREIGN KEY (id_cliente) REFERENCES Cliente(ID_Cliente)
 );
 
@@ -211,10 +211,12 @@ END insertar_tipo_prestamo;
 CREATE OR REPLACE FUNCTION calcular_edad (p_fecha_nacimiento IN DATE) RETURN NUMBER AS
     v_edad NUMBER;
 BEGIN
-    edad := TRUNC(MONTHS_BETWEEN(SYSDATE, p_fecha_nacimiento) / 12);
+    v_edad := TRUNC(MONTHS_BETWEEN(SYSDATE, p_fecha_nacimiento) / 12);
     RETURN v_edad;
 END calcular_edad;
 /
+
+---------------------------------------------------------------------------
 
 --Procedimiento para insertar cliente
 CREATE OR REPLACE PROCEDURE insertar_cliente (
@@ -270,4 +272,78 @@ END insertar_prestamo;
 /
 
 --Procedimiento para insertar pagos
-CREATE OR REPLACE PROCEDURE insertar_pagos(cod_sucursal)
+CREATE OR REPLACE PROCEDURE insertar_pago (
+    p_cod_sucursal IN NUMBER,
+    p_id_cliente IN NUMBER,
+    p_tipo_prestamo IN VARCHAR2,
+   p_fecha_transaccion IN DATE,
+    p_monto_pago IN NUMBER,
+    p_usuario IN VARCHAR2
+)  AS
+    v_id_transaccion NUMBER;
+BEGIN
+    -- Obtener el siguiente valor de la secuencia para la transacción
+    v_id_transaccion := seq_id_transaccion.NEXTVAL;
+
+    -- Insertar la transacción
+    INSERT INTO transaccion (
+        cod_sucursal, id_transaccion, id_cliente, ID_Prestamo, fecha_transaccion, monto_pago, fechainsercion, usuario
+    ) VALUES (
+        p_cod_sucursal, v_id_transaccion, p_id_cliente, p_tipo_prestamo, p_fecha_transaccion, p_monto_pago, SYSDATE, p_usuario
+    );
+END insertar_pago;
+/
+
+--Funcion para calcular los intereses
+CREATE OR REPLACE FUNCTION calcular_interes(
+    saldo_actual IN NUMBER,
+    tasa_interes IN NUMBER
+) RETURN NUMBER AS
+    v_interes NUMBER;
+BEGIN
+    v_interes := saldo_actual * (tasa_interes / 100);
+    RETURN v_interes;
+END calcular_interes;
+/
+
+--Procedimiento para actualizar prestamos con pagos 
+CREATE OR REPLACE PROCEDURE actualizar_pagos IS
+    CURSOR c_pagos IS
+        SELECT cod_sucursal, id_cliente, id_prestamo, monto_pago, usuario
+        FROM transaccion
+        WHERE fechainsercion > (
+            SELECT NVL(MAX(FECHA_MODIFICACION), TO_DATE('01/01/1900','DD/MM/YYYY'))
+            FROM prestamo
+            WHERE id_cliente = transaccion.id_cliente
+              AND id_prestamo = transaccion.id_prestamo
+        );
+    v_saldo_actual   NUMBER;
+    v_tasa_interes   NUMBER;
+    v_interes        NUMBER;
+BEGIN
+    FOR r_pago IN c_pagos LOOP
+        -- Obtener el saldo actual y la tasa de interés del préstamo
+        SELECT SALDO_ACTUAL, TASA_INTERES INTO v_saldo_actual, v_tasa_interes
+        FROM prestamo
+        WHERE ID_CLIENTE = r_pago.ID_CLIENTE
+          AND ID_PRESTAMO = r_pago.ID_PRESTAMO;
+
+        -- Calcular el interés
+        v_interes := calcular_interes(v_saldo_actual, v_tasa_interes);
+
+        -- Actualizar el préstamo
+        UPDATE prestamo
+           SET SALDO_ACTUAL = SALDO_ACTUAL - (r_pago.MONTO_PAGO - v_interes),
+               INTERES_PAGADO = INTERES_PAGADO + v_interes,
+               FECHA_MODIFICACION = SYSDATE,
+               USUARIO = r_pago.USUARIO
+         WHERE ID_CLIENTE = r_pago.ID_CLIENTE
+           AND ID_PRESTAMO = r_pago.ID_PRESTAMO;
+
+        -- Actualizar la sucursal
+        UPDATE sucursal
+           SET MONTO_PRESTAMOS = MONTO_PRESTAMOS - (r_pago.MONTO_PAGO - v_interes)
+         WHERE COD_SUCURSAL = r_pago.COD_SUCURSAL;
+    END LOOP;
+END;
+/

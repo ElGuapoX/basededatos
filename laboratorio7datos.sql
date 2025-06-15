@@ -65,62 +65,30 @@ EXEC insertar_profesion('Doctor');
 -- =========================
 
 -- CLIENTE 1
-EXEC insertar_cliente('001-0000001-1', 'Juan', NULL, 'Perez', NULL, 'M', TO_DATE('1990-01-01','YYYY-MM-DD'), 1);
-EXEC insertar_email_cliente(1, 1, 'juan.perez@gmail.com');
-EXEC insertar_tel_cliente(1, 1, '8091111111');
+EXEC insertar_cliente('001-0000001-1', 'Juan', NULL, 'Perez', NULL, 'M', TO_DATE('1990-01-01','YYYY-MM-DD'), 1, 1,1, 'juan.perez@gmail.com', 1, '8091111111');
 
 -- CLIENTE 2
-EXEC insertar_cliente('001-0000002-2', 'Maria', NULL, 'Gomez', NULL, 'F', TO_DATE('1985-05-10','YYYY-MM-DD'), 2);
-EXEC insertar_email_cliente(2, 2, 'maria.gomez@hotmail.com');
-EXEC insertar_tel_cliente(2, 2, '8092222222');
+EXEC insertar_cliente('001-0000002-2','Maria',NULL,'Gomez',NULL,'F',TO_DATE('1985-05-10','YYYY-MM-DD'),2,2,2,'maria.gomez@hotmail.com',2,'8092222222');
 
 -- CLIENTE 3
-EXEC insertar_cliente('001-0000003-3', 'Carlos', NULL, 'Lopez', NULL, 'M', TO_DATE('1978-11-23','YYYY-MM-DD'), 1);
-EXEC insertar_email_cliente(3, 1, 'carlos.lopez@empresa.com');
-EXEC insertar_tel_cliente(3, 1, '8093333333');
+EXEC insertar_cliente('001-0000003-3', 'Carlos', NULL, 'Lopez', NULL, 'M', TO_DATE('1978-11-23','YYYY-MM-DD'), 1, 1,1, 'carlos.lopez@empresa.com',2, '8093333333');
+
+-----------------------------
+--Llegue hasta aqui
+-----------------------------
 
 -- =========================
 -- 3. APROBACION DEL PRODUCTO POR EL BANCO (PRESTAMOS)
 -- =========================
 
 -- PRESTAMO CLIENTE 1
-EXEC insertar_prestamo(
-    1, -- ID_Cliente
-    10001, -- Numero_Prestamo
-    TO_DATE('2024-06-01','YYYY-MM-DD'), -- Fecha_Aprobado
-    100000, -- Monto_Aprobado
-    12, -- Tasa_Interes
-    2500, -- Letra_Mensual
-    0, -- Monto_Pagado
-    NULL, -- Fecha_Pago
-    1 -- Cod_Sucursal
-);
+EXEC insertar_prestamo(1, 1, 10001, TO_DATE('2024-06-01','YYYY-MM-DD'), 100000, 12, 2500, 1, 'admin');
 
 -- PRESTAMO CLIENTE 2
-EXEC insertar_prestamo(
-    2, -- ID_Cliente
-    20001, -- Numero_Prestamo
-    TO_DATE('2024-06-02','YYYY-MM-DD'), -- Fecha_Aprobado
-    150000, -- Monto_Aprobado
-    10, -- Tasa_Interes
-    3500, -- Letra_Mensual
-    0, -- Monto_Pagado
-    NULL, -- Fecha_Pago
-    2 -- Cod_Sucursal
-);
+EXEC insertar_prestamo(2, 2, 20001, TO_DATE('2024-06-02','YYYY-MM-DD'), 150000, 10, 3500, 2, 'admin');
 
 -- PRESTAMO CLIENTE 3
-EXEC insertar_prestamo(
-    3, -- ID_Cliente
-    30001, -- Numero_Prestamo
-    TO_DATE('2024-06-03','YYYY-MM-DD'), -- Fecha_Aprobado
-    200000, -- Monto_Aprobado
-    11, -- Tasa_Interes
-    4000, -- Letra_Mensual
-    0, -- Monto_Pagado
-    NULL, -- Fecha_Pago
-    1 -- Cod_Sucursal
-);
+EXEC insertar_prestamo(3, 3, 30001, TO_DATE('2024-06-03','YYYY-MM-DD'), 200000, 11, 4500, 1, 'admin');
 
 -- =========================
 -- 4. RECUPERACION DE LA CARTERA DE PRESTAMOS

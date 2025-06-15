@@ -2,6 +2,20 @@
 
 --Creacion de secuecias
 
+CREATE SEQUENCE seq_id_tipo_email
+START WITH 1
+INCREMENT BY 1
+NOMAXVALUE
+MINVALUE 1
+NOCYCLE;
+
+CREATE SEQUENCE seq_id_tipo_telefono
+START WITH 1
+INCREMENT BY 1
+NOMAXVALUE
+MINVALUE 1
+NOCYCLE;
+
 CREATE SEQUENCE seq_id_cliente
 START WITH 1
 INCREMENT BY 1
@@ -37,6 +51,13 @@ NOMAXVALUE
 MINVALUE 1
 NOCYCLE;
 
+CREATE SEQUENCE seq_id_prestamo_p
+START WITH 1
+INCREMENT BY 1
+NOMAXVALUE
+MINVALUE 1
+NOCYCLE;
+
 CREATE SEQUENCE seq_id_transaccion
 START WITH 1
 INCREMENT BY 1
@@ -54,7 +75,7 @@ NOCYCLE;
 -- Tabla Profesion
 CREATE TABLE Profesion (
 ID_Profesion NUMBER PRIMARY KEY,
-Profesion VARCHAR2(100) NOT NULL
+Profesion VARCHAR2(20) NOT NULL
 );
 
 -- Tabla Cliente
@@ -112,6 +133,7 @@ Tasa_Interes_Prom NUMBER(5, 2) NOT NULL
 
 -- Tabla Prestamo
 CREATE TABLE Prestamo (
+ID_prestamo_p NUMBER PRIMARY KEY,
 ID_Cliente NUMBER,
 ID_Prestamo NUMBER,
 Numero_Prestamo NUMBER,
@@ -121,7 +143,6 @@ Tasa_Interes NUMBER(5, 2) NOT NULL,
 Letra_Mensual NUMBER(12, 2) NOT NULL,
 Monto_Pagado NUMBER(12, 2),
 Fecha_Pago DATE,
-PRIMARY KEY (ID_Cliente, ID_Prestamo),
 FOREIGN KEY (ID_Cliente) REFERENCES Cliente(ID_Cliente),
 FOREIGN KEY (ID_Prestamo) REFERENCES Tipo_Prestamo(ID_Prestamo)
 );
@@ -166,21 +187,27 @@ CREATE TABLE transaccion (
 
 -- Procedimientos
 
-CREATE OR REPLACE PROCEDURE insertar_tipo_telefono (p_id_telefono IN NUMBER, p_tipo_telefono IN VARCHAR2) AS
+CREATE OR REPLACE PROCEDURE insertar_tipo_telefono ( p_tipo_telefono IN VARCHAR2) AS
+    v_id_telefono NUMBER;
 BEGIN
-    INSERT INTO Tipo_Telefono (ID_Telefono, Tipo_Telefono) VALUES (p_id_telefono, p_tipo_telefono);
+    v_id_telefono := seq_id_tipo_telefono.NEXTVAL;
+    INSERT INTO Tipo_Telefono (ID_Telefono, Tipo_Telefono) VALUES (v_id_telefono, p_tipo_telefono);
 END insertar_tipo_telefono;
 /
 
-CREATE OR REPLACE PROCEDURE insertar_tipo_email (p_id_email IN NUMBER, p_tipo_email IN VARCHAR2) AS
+CREATE OR REPLACE PROCEDURE insertar_tipo_email ( p_tipo_email IN VARCHAR2) AS
+    v_id_email NUMBER;
 BEGIN
-    INSERT INTO Tipo_Email (ID_Email, Tipo_Email) VALUES (p_id_email, p_tipo_email);
+    v_id_email := seq_id_email.NEXTVAL;
+    INSERT INTO Tipo_Email (ID_Email, Tipo_Email) VALUES (v_id_email, p_tipo_email);
 END insertar_tipo_email;
 /
 
-CREATE OR REPLACE PROCEDURE insertar_profesion (p_id_profesion IN NUMBER, p_profesion IN VARCHAR2) AS
+CREATE OR REPLACE PROCEDURE insertar_profesion (p_profesion IN VARCHAR2) AS
+    v_id_profesion NUMBER;
 BEGIN
-    INSERT INTO Profesion (ID_Profesion, Profesion) VALUES (p_id_profesion, p_profesion);
+    v_id_profesion := seq_id_profesion.NEXTVAL;
+    INSERT INTO Profesion (ID_Profesion, Profesion) VALUES (v_id_profesion, p_profesion);
 END insertar_profesion;
 /
 
@@ -233,49 +260,69 @@ CREATE OR REPLACE PROCEDURE insertar_cliente (
     p_sexo IN CHAR,
     p_fecha_nacimiento IN DATE,
     p_id_profesion IN NUMBER,
-    p_cod_sucursal IN NUMBER
+    p_cod_sucursal IN NUMBER,
+    p_id_email IN NUMBER,
+    p_email IN VARCHAR2,
+    p_id_telefono IN NUMBER,
+    p_telefono IN VARCHAR2
 ) AS
     v_id_cliente NUMBER;
+    v_edad NUMBER;
 BEGIN
-    -- Cada vez que se inserte un cliente, se obtiene el siguiente valor de la secuencia, lo que va incrementando automáticamente el ID del cliente.
     v_id_cliente := seq_id_cliente.NEXTVAL;
+    v_edad := calcular_edad(p_fecha_nacimiento);
 
-    -- Insertar el cliente
-    INSERT INTO Cliente (ID_Cliente, Cedula, Nombre, NombreA, Apellido, ApellidoA, Sexo, Fecha_Nacimiento, ID_Profesion, edad, cod_sucursal)
-    VALUES (v_id_cliente, p_cedula, p_nombre, p_nombreA, p_apellido, p_apellidoA, p_sexo, p_fecha_nacimiento, p_id_profesion, calcular_edad(p_fecha_nacimiento), p_cod_sucursal);
+    INSERT INTO Cliente (
+        ID_Cliente, Cedula, Nombre, NombreA, Apellido, ApellidoA, Sexo, Fecha_Nacimiento, ID_Profesion, Edad, COD_SUCURSAL
+    ) VALUES (
+        v_id_cliente, p_cedula, p_nombre, p_nombreA, p_apellido, p_apellidoA, p_sexo, p_fecha_nacimiento, p_id_profesion, v_edad, p_cod_sucursal
+    );
+
+    INSERT INTO Email_Cliente (ID_Cliente, ID_Email, Email)
+    VALUES (v_id_cliente, p_id_email, p_email);
+
+    INSERT INTO Tel_Cliente (ID_Cliente, ID_Telefono, Telefono)
+    VALUES (v_id_cliente, p_id_telefono, p_telefono);
+
+EXCEPTION
+    WHEN OTHERS THEN
+        DBMS_OUTPUT.PUT_LINE('Error en insertar_cliente: ' || SQLERRM);
 END insertar_cliente;
 /
 
 --Proceimiento para insertar prestamos
 CREATE OR REPLACE PROCEDURE insertar_prestamo (
-    p_id_cliente IN NUMBER,
-    p_id_prestamo IN NUMBER,
+    p_id_cliente      IN NUMBER,
+    p_id_prestamo    IN NUMBER,
     p_numero_prestamo IN NUMBER,
-    p_fecha_aprobado IN DATE,
-    p_monto_aprobado IN NUMBER,
-    p_tasa_interes IN NUMBER,
-    p_letra_mensual IN NUMBER,
-    p_monto_pagado IN NUMBER,
-    p_fecha_pago IN DATE,
-    p_cod_sucursal IN NUMBER
+    p_fecha_aprobado  IN DATE,
+    p_monto_aprobado  IN NUMBER,
+    p_tasa_interes    IN NUMBER,
+    p_letra_mensual   IN NUMBER,
+    p_cod_sucursal    IN NUMBER,
+    p_usuario         IN VARCHAR2
 ) AS
+    v_id_prestamo_p NUMBER;
 BEGIN
-    v_id_prestamo := seq_id_prestamo.NEXTVAL;
+    v_id_prestamo_p := seq_id_prestamo_p.NEXTVAL;
+
     INSERT INTO Prestamo (
-        ID_Cliente, ID_Prestamo, Numero_Prestamo, Fecha_Aprobado, Monto_Aprobado, 
-        Tasa_Interes, Letra_Mensual, Monto_Pagado, Fecha_Pago, cod_sucursal,
-        interes_pagado, saldo_actual, fecha_modificacion, usuario
-    )
-    VALUES (
-        p_id_cliente, p_id_prestamo, p_numero_prestamo, p_fecha_aprobado, p_monto_aprobado, 
-        p_tasa_interes, p_letra_mensual, NVL(p_monto_pagado,0), p_fecha_pago, p_cod_sucursal,
-        0, p_monto_aprobado, SYSDATE, 'SYSTEM'
+        ID_PRESTAMO_P, ID_CLIENTE, ID_PRESTAMO, NUMERO_PRESTAMO, FECHA_APROBADO, MONTO_APROBADO,
+        TASA_INTERES, LETRA_MENSUAL, MONTO_PAGADO, FECHA_PAGO, COD_SUCURSAL,
+        INTERES_PAGADO, SALDO_ACTUAL, FECHA_MODIFICACION, USUARIO
+    ) VALUES (
+        v_id_prestamo_p, p_id_cliente, p_id_prestamo, p_numero_prestamo, p_fecha_aprobado, p_monto_aprobado,
+        p_tasa_interes, p_letra_mensual, 0, NULL, p_cod_sucursal,
+        0, p_monto_aprobado, SYSDATE, p_usuario
     );
 
-    UPDATE SUCURSAL SET 
-        monto_prestamos = monto_prestamos + p_monto_aprobado
-    WHERE
-        cod_sucursal = p_cod_sucursal;
+    UPDATE SUCURSAL
+       SET MONTO_PRESTAMOS = MONTO_PRESTAMOS + p_monto_aprobado
+     WHERE COD_SUCURSAL = p_cod_sucursal;
+
+EXCEPTION
+    WHEN OTHERS THEN
+        DBMS_OUTPUT.PUT_LINE('Error en insertar_prestamo: ' || SQLERRM);
 END insertar_prestamo;
 /
 

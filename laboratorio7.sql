@@ -185,25 +185,30 @@ END insertar_profesion;
 /
 
 CREATE OR REPLACE PROCEDURE insertar_sucursal (
-    p_cod_sucursal IN NUMBER,
     p_nombresucursal IN VARCHAR2,
     p_tipo_prestamo IN VARCHAR2,
     p_monto_prestamos IN NUMBER
 ) AS
+    v_cod_sucursal NUMBER;
 BEGIN
+    v_cod_sucursal := seq_cod_sucursal.NEXTVAL; 
     INSERT INTO SUCURSAL (cod_sucursal, nombresurcursal, Tipo_Prestamo, monto_prestamos)
-    VALUES (p_cod_sucursal, p_nombresucursal, p_tipo_prestamo, p_monto_prestamos);
+    VALUES (v_cod_sucursal, p_nombresucursal, p_tipo_prestamo, p_monto_prestamos);
 END insertar_sucursal;
 /
 
 CREATE OR REPLACE PROCEDURE insertar_tipo_prestamo (
-    p_id_prestamo IN NUMBER,
     p_tipo_prestamo IN VARCHAR2,
     p_tasa_interes_prom IN NUMBER
-) AS    
+) AS
+    v_id_prestamo NUMBER;
 BEGIN
+    v_id_prestamo := seq_id_prestamo.NEXTVAL;
     INSERT INTO Tipo_Prestamo (ID_Prestamo, Tipo_Prestamo, Tasa_Interes_Prom)
-    VALUES (p_id_prestamo, p_tipo_prestamo, p_tasa_interes_prom);
+    VALUES (v_id_prestamo, p_tipo_prestamo, p_tasa_interes_prom);
+EXCEPTION
+    WHEN OTHERS THEN
+        DBMS_OUTPUT.PUT_LINE('Error en insertar_tipo_prestamo: ' || SQLERRM);
 END insertar_tipo_prestamo;
 /
 
@@ -254,20 +259,23 @@ CREATE OR REPLACE PROCEDURE insertar_prestamo (
     p_fecha_pago IN DATE,
     p_cod_sucursal IN NUMBER
 ) AS
-    v_id_prestamo NUMBER;
 BEGIN
-    -- Cada vez que se inserte un préstamo, se obtiene el siguiente valor de la secuencia, lo que va incrementando automáticamente el ID del préstamo.
     v_id_prestamo := seq_id_prestamo.NEXTVAL;
-
-    -- Insertar el préstamo
-    INSERT INTO Prestamo (ID_Cliente, ID_Prestamo, Numero_Prestamo, Fecha_Aprobado, Monto_Aprobado, Tasa_Interes, Letra_Mensual, Monto_Pagado, Fecha_Pago, cod_sucursal)
-    VALUES (p_id_cliente, v_id_prestamo, p_numero_prestamo, p_fecha_aprobado, p_monto_aprobado, p_tasa_interes, p_letra_mensual, p_monto_pagado, p_fecha_pago, p_cod_sucursal);
+    INSERT INTO Prestamo (
+        ID_Cliente, ID_Prestamo, Numero_Prestamo, Fecha_Aprobado, Monto_Aprobado, 
+        Tasa_Interes, Letra_Mensual, Monto_Pagado, Fecha_Pago, cod_sucursal,
+        interes_pagado, saldo_actual, fecha_modificacion, usuario
+    )
+    VALUES (
+        p_id_cliente, p_id_prestamo, p_numero_prestamo, p_fecha_aprobado, p_monto_aprobado, 
+        p_tasa_interes, p_letra_mensual, NVL(p_monto_pagado,0), p_fecha_pago, p_cod_sucursal,
+        0, p_monto_aprobado, SYSDATE, 'SYSTEM'
+    );
 
     UPDATE SUCURSAL SET 
         monto_prestamos = monto_prestamos + p_monto_aprobado
     WHERE
         cod_sucursal = p_cod_sucursal;
-
 END insertar_prestamo;
 /
 
@@ -275,21 +283,18 @@ END insertar_prestamo;
 CREATE OR REPLACE PROCEDURE insertar_pago (
     p_cod_sucursal IN NUMBER,
     p_id_cliente IN NUMBER,
-    p_tipo_prestamo IN VARCHAR2,
-   p_fecha_transaccion IN DATE,
+    p_id_prestamo IN NUMBER,
+    p_fecha_transaccion IN DATE,
     p_monto_pago IN NUMBER,
     p_usuario IN VARCHAR2
 )  AS
     v_id_transaccion NUMBER;
 BEGIN
-    -- Obtener el siguiente valor de la secuencia para la transacción
     v_id_transaccion := seq_id_transaccion.NEXTVAL;
-
-    -- Insertar la transacción
     INSERT INTO transaccion (
         cod_sucursal, id_transaccion, id_cliente, ID_Prestamo, fecha_transaccion, monto_pago, fechainsercion, usuario
     ) VALUES (
-        p_cod_sucursal, v_id_transaccion, p_id_cliente, p_tipo_prestamo, p_fecha_transaccion, p_monto_pago, SYSDATE, p_usuario
+        p_cod_sucursal, v_id_transaccion, p_id_cliente, p_id_prestamo, p_fecha_transaccion, p_monto_pago, SYSDATE, p_usuario
     );
 END insertar_pago;
 /
@@ -312,7 +317,7 @@ CREATE OR REPLACE PROCEDURE actualizar_pagos IS
         SELECT cod_sucursal, id_cliente, id_prestamo, monto_pago, usuario
         FROM transaccion
         WHERE fechainsercion > (
-            SELECT NVL(MAX(FECHA_MODIFICACION), TO_DATE('01/01/1900','DD/MM/YYYY'))
+            SELECT NVL(MAX(fecha_modificacion), TO_DATE('01/01/1900','DD/MM/YYYY'))
             FROM prestamo
             WHERE id_cliente = transaccion.id_cliente
               AND id_prestamo = transaccion.id_prestamo
@@ -320,13 +325,20 @@ CREATE OR REPLACE PROCEDURE actualizar_pagos IS
     v_saldo_actual   NUMBER;
     v_tasa_interes   NUMBER;
     v_interes        NUMBER;
+    v_monto_pagado   NUMBER;
 BEGIN
     FOR r_pago IN c_pagos LOOP
         -- Obtener el saldo actual y la tasa de interés del préstamo
-        SELECT SALDO_ACTUAL, TASA_INTERES INTO v_saldo_actual, v_tasa_interes
+        SELECT SALDO_ACTUAL, TASA_INTERES, MONTO_PAGADO INTO v_saldo_actual, v_tasa_interes, v_monto_pagado
         FROM prestamo
         WHERE ID_CLIENTE = r_pago.ID_CLIENTE
           AND ID_PRESTAMO = r_pago.ID_PRESTAMO;
+
+        -- Validar que el pago no sea mayor al saldo
+        IF r_pago.MONTO_PAGO > v_saldo_actual THEN
+            -- Opcional: puedes lanzar un error o ajustar el pago al saldo
+            CONTINUE;
+        END IF;
 
         -- Calcular el interés
         v_interes := calcular_interes(v_saldo_actual, v_tasa_interes);
@@ -335,6 +347,8 @@ BEGIN
         UPDATE prestamo
            SET SALDO_ACTUAL = SALDO_ACTUAL - (r_pago.MONTO_PAGO - v_interes),
                INTERES_PAGADO = INTERES_PAGADO + v_interes,
+               MONTO_PAGADO = MONTO_PAGADO + r_pago.MONTO_PAGO,
+               FECHA_PAGO = SYSDATE,
                FECHA_MODIFICACION = SYSDATE,
                USUARIO = r_pago.USUARIO
          WHERE ID_CLIENTE = r_pago.ID_CLIENTE
